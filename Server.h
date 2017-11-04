@@ -1,11 +1,5 @@
 using namespace std;
 
-struct cmp {
-    bool operator()(const Msg& a, const Msg& b) const {
-        return a.msgID < b.msgID;
-    }
-};
-
 class Server {
 public:
   struct sockaddr_in local;
@@ -24,7 +18,7 @@ public:
   int Pg[10];
   int Ag[10];
   priority_queue<Msg, vector<Msg>, Compare> totalHold;
-  map<Msg, priority_queue<pair<int, int> >, cmp> proposalCount;
+  vector<pair<Msg, priority_queue<int> > > proposalCount;
 
   Server(string str_addr) {
     string ip = str_addr.substr(0, str_addr.find(":"));
@@ -70,7 +64,7 @@ public:
     target = cli.addr;
     int res = sendto(sock, msg, strlen(msg), 0, (struct sockaddr*)&target, sizeof(target));
     if (res < 0) return false;
-    if (*vflag) printf("S[%d] sent a message to [%s]\n", this->id, cli.toString().c_str());
+    if (*vflag) printf("S[%d] SEND            : [%s]\n", this->id, cli.toString().c_str());
     return true;
   }
   /* Create a chat room with a romm id */
@@ -126,7 +120,7 @@ public:
       if (res < 0) {
         if (*vflag) printf("S[%d] failed sending msg to [%s]\n", this->id, cur->addr.c_str());
       } else {
-        if (*vflag) printf("S[%d] sent a msg to [%s]\n", this->id, cur->addr.c_str());
+        if (*vflag) printf("S[%d] SEND            : [%s]\n", this->id, cur->addr.c_str());
       }
     }
   }
@@ -145,7 +139,7 @@ public:
     for (int i = 0; i < clients.size(); i++) {
       Client* cur = clients.at(i);
       this->sendMsg(*cur, content);
-      if (*vflag) printf("S[%d] delivered msg to [%s] in room [%d]\n", this->id, cur->nickname.c_str(), target->room_id);
+      // if (*vflag) printf("S[%d] delivered msg to [%s] in room [%d]\n", this->id, cur->nickname.c_str(), target->room_id);
     }
     free(content);
   }
@@ -185,51 +179,70 @@ public:
   /* Server do TOTAL-multicast to other servers */
   void TOTALmulticast(Msg m) {
     m.state = 0;
+    m.msgID = 0;
+    m.nodeID = this->servers.size() + 1;
     char* msg = m.encodingTOTAL();
-    if (*vflag) printf("S[%d] is ready to TOTALmulticast [%s]\n", this->id, msg);
+    if (*vflag) printf("S[%d] MULTICAST_SERVER: [%s]\n", this->id, msg);
     this->broadcast(msg);
     free(msg);
-    priority_queue<pair<int, int> > queue;
-    this->proposalCount[m] = queue;
+    priority_queue<int> queue;
+    pair<Msg, priority_queue<int> > p(m, queue);
+    this->proposalCount.push_back(p);
   }
   /* Respond to the incoming request of a proposal */
   void respond(Client c, Msg m) {
     int group = m.room_id;
-    int Pg_new = ::max(this->Pg[group - 1], this->Ag[group - 1]) + 1;
-    this->Pg[group - 1] = Pg_new;
+    this->Pg[group - 1] = std::max(this->Pg[group - 1], this->Ag[group - 1]) + 1;
     // Add current Msg to holdback queue
     m.deliverable = false;
-    m.msgID = Pg_new;
-    this->totalHold.push(m);
+    m.msgID = this->Pg[group - 1];
     m.state = 1;
     m.nodeID = this->id;
+    this->totalHold.push(m);
     char* msg = m.encodingTOTAL();
-    if (*vflag) printf("S[%d] is ready to make a proposal [%s]\n", this->id, msg);
+    // cout << "Server.h/212/respond: " << m.nodeID << " nodeID" << endl;
+
+    if (*vflag) printf("S[%d] PROPOSE         : [%s] P: [%d] ID: [%d]\n", this->id, msg, m.msgID, m.nodeID);
     this->sendMsg(c, msg);
     free(msg);
   }
   /* Collect proposal from other nodes and make a decision multicast */
-  void collect(Client& c, Msg& m) {
-    for (map<Msg,priority_queue<pair<int, int> > >::iterator it=this->proposalCount.begin(); it!=this->proposalCount.end(); ++it) {
-      Msg cur = it->first;
+  void collect(Client& c, Msg m) {
+    // cout << "Server.h/219/collect incoming: " << m.nodeID << " nodeID" << endl;
+    for (int i = 0; i < this->proposalCount.size(); i++) {
+      pair<Msg, priority_queue<int> >& it = this->proposalCount.at(i);
+      Msg& cur = it.first;
+      // cout << cur.room_id << " " << cur.nickname << " " << cur.content << endl;
       if (m.equals(cur)) {
-        priority_queue<pair<int, int> >& pq = it->second;
-        int msgID = m.msgID;
+        priority_queue<int>& pq = it.second;
+        int proposal = m.msgID;
         int nodeID = m.nodeID;
-        pair<int, int> proposal(msgID, nodeID);
+
+        if (*vflag) printf("S[%d] COLLECT         : [%s] P: [%d] ID: [%d]\n", this->id, m.encodingTOTAL(), proposal, nodeID);
+        // pq.push(proposal);
+        // if (proposal > pq.top() || (proposal == pq.top() && cur.nodeID > nodeID)) {
+        //   cur.nodeID = nodeID;
+        // }
+        if (pq.empty() || (proposal > pq.top())) {
+          cur.nodeID = nodeID;
+        } else if (proposal == pq.top()) {
+          cur.nodeID = ::min(cur.nodeID, nodeID);
+        }
         pq.push(proposal);
-        printf("The current PQ size is [%lu]\n", pq.size());
+
+        // printf("The current PQ size is [%lu]\n", pq.size());
         if (pq.size() == this->servers.size()) {
-          proposal = pq.top();
+          int pro = pq.top();
           Msg out = cur;
-          out.msgID = proposal.first;
-          out.nodeID = proposal.second;
+          out.msgID = pro;
+          out.nodeID = cur.nodeID;
           out.state = 2;
           char* msg = out.encodingTOTAL();
-          if (*vflag) printf("S[%d] is ready to send a decision: [%s]\n", this->id, msg);
+
+          if (*vflag) printf("S[%d] SEND            : [%s] A: [%d] ID: [%d]\n", this->id, msg, out.msgID, out.nodeID);
           this->broadcast(msg);
           free(msg);
-          this->proposalCount.erase(it);
+          this->proposalCount.erase(this->proposalCount.begin() + i);
         }
         break;
       }
@@ -237,18 +250,22 @@ public:
   }
   /* Update a decision for a specific msg and deliver */
   void update(Client & c, Msg& m) {
+
+    if (*vflag) printf("S[%d] UPDATE          : [%s] A: [%d] ID: [%d]\n", this->id, m.encodingTOTAL(), m.msgID, m.nodeID);
     int group = m.room_id;
     priority_queue<Msg, vector<Msg>, Compare>& holdback = this->totalHold;
     priority_queue<Msg, vector<Msg>, Compare> temp;
     while (!holdback.empty()) {
       Msg cur = holdback.top();
+      // cout << "Highest Proposal " << cur.msgID << " from node " << cur.nodeID << endl;
       holdback.pop();
-      cout << "[Server.h/update/line 241]: " << cur.content << endl;
       if (cur.equals(m)) {
         cur.nodeID = m.nodeID;
         cur.msgID = m.msgID;
         cur.deliverable = true;
-        this->Ag[group-1] = ::max(m.msgID, this->Ag[group-1]);
+        this->Ag[group-1] = std::max(m.msgID, this->Ag[group-1]);
+
+        if (*vflag) printf("S[%d] MARK DELIVER    : [%s] A: [%d] ID: [%d]\n", this->id, cur.encodingTOTAL(), cur.msgID, cur.nodeID);
       }
       temp.push(cur);
     }
@@ -256,9 +273,22 @@ public:
     holdback = this->totalHold;
     Msg check = holdback.top();
     while (check.deliverable) {
+      printHoldBack(holdback);
       holdback.pop();
       this->deliverRoom(check);
+      if (*vflag) printf("S[%d] FINAL DELIVER   : [%s] A: [%d] ID: [%d]\n", this->id, check.encodingTOTAL(), check.msgID, check.nodeID);
+      if (holdback.empty()) break;
       check = holdback.top();
     }
+  }
+
+  void printHoldBack(priority_queue<Msg, vector<Msg>, Compare> pq) {
+    cout << endl;
+    while (!pq.empty()) {
+      Msg m = pq.top();
+      pq.pop();
+      if (*vflag) printf("   S[%d] PRORITY QUEUE: [%s] A: [%d] ID: [%d]\n", this->id, m.encodingTOTAL(), m.msgID, m.nodeID);
+    }
+    cout << endl;
   }
 };

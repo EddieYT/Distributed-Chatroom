@@ -53,11 +53,12 @@ int main(int argc, char *argv[])
     if (rlen > 0) {
       if (from_server(client, servers)) {
         Client c(client);
-        if (vflag) printf("S[%d] got a message from [%s]\n", my_server.id, c.toString().c_str());
+
+        if (vflag) printf("S[%d] SEND TO         : [%s]\n", my_server.id, c.toString().c_str());
         handle_server(buff, my_server, c);
       } else {
         Client c(client);
-        if (vflag) printf("S[%d] got a message from [%s]\n", my_server.id, c.toString().c_str());
+        if (vflag) printf("S[%d] RECEIVE FROM    : [%s]\n", my_server.id, c.toString().c_str());
         handle_client(buff, my_server, c);
       }
     }

@@ -165,10 +165,10 @@ class Compare {
 public:
   bool operator() (const Msg& lhs, const Msg&rhs) const
   {
-    if (lhs.msgID < rhs.msgID) {
+    if (lhs.msgID > rhs.msgID) {
       return true;
     } else if (lhs.msgID == rhs.msgID) {
-      return lhs.nodeID > rhs.nodeID;
+      return lhs.nodeID < rhs.nodeID;
     }
     return false;
   }

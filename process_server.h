@@ -11,7 +11,7 @@ void handle_server(char* msg, Server& my_server, Client& c) {
     my_server.deliverUnordered(m);
   } else if (state == FIFO) {
     Msg m;
-    if (vflag) printf("S[%d] is ready to decode [%s] from [%s]\n", my_server.id, msg, c.toString().c_str());
+    if (vflag) printf("S[%d] DECODE          : [%s] FROM [%s]\n", my_server.id, msg, c.toString().c_str());
     m.FIFOdecode(msg);
     if (vflag) printf("S[%d] is ready to deliver FIFO message for group[%d] #[%d]\n", my_server.id, m.room_id, m.msgID);
     my_server.deliverFIFO(m, c);
@@ -19,13 +19,10 @@ void handle_server(char* msg, Server& my_server, Client& c) {
     Msg m;
     m.decodeTOTAL(msg);
     if (m.state == 0) {
-      if (vflag) printf("S[%d] is ready to respond rquest from [%s]\n", my_server.id, msg);
       my_server.respond(c, m);
     } else if (m.state == 1) {
-      if (vflag) printf("S[%d] is ready to collect proposals from [%s]\n", my_server.id, msg);
       my_server.collect(c, m);
     } else if (m.state == 2) {
-      if (vflag) printf("S[%d] is ready to update decision from [%s]\n", my_server.id, msg);
       my_server.update(c, m);
     }
   }
