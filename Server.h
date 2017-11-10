@@ -31,6 +31,7 @@ public:
     servaddr.sin_port = htons(stoi(port));
     this->local = servaddr;
   }
+  /* Initialize the state for TOTAL ordering */
   void initTOTAL() {
     for (int i = 0; i < 10; i++) {
       this->Pg[i] = 0;
@@ -64,7 +65,7 @@ public:
     target = cli.addr;
     int res = sendto(sock, msg, strlen(msg), 0, (struct sockaddr*)&target, sizeof(target));
     if (res < 0) return false;
-    if (*vflag) printf("S[%d] SEND            : [%s]\n", this->id, cli.toString().c_str());
+    if (*vflag) printf("%s S[%d] SEND            : [%s]\n",this->getTime().c_str(), this->id, cli.toString().c_str());
     return true;
   }
   /* Create a chat room with a romm id */
@@ -109,7 +110,7 @@ public:
     target->setNickname(c, name);
     return true;
   }
-  /* broadcast a message to other servers */
+  /* Broadcast a message to other servers */
   void broadcast(char* msg) {
     for(int i = 0; i < servers.size(); i++) {
       struct sockaddr_in target;
@@ -118,9 +119,9 @@ public:
       target = cur->local;
       int res = sendto(sock, msg, strlen(msg), 0, (struct sockaddr*)&target, sizeof(target));
       if (res < 0) {
-        if (*vflag) printf("S[%d] failed sending msg to [%s]\n", this->id, cur->addr.c_str());
+        if (*vflag) printf("%s S[%d] failed sending msg to [%s]\n",this->getTime().c_str(), this->id, cur->addr.c_str());
       } else {
-        if (*vflag) printf("S[%d] SEND            : [%s]\n", this->id, cur->addr.c_str());
+        if (*vflag) printf("%s S[%d] SEND            : [%s]\n",this->getTime().c_str(), this->id, cur->addr.c_str());
       }
     }
   }
@@ -139,7 +140,6 @@ public:
     for (int i = 0; i < clients.size(); i++) {
       Client* cur = clients.at(i);
       this->sendMsg(*cur, content);
-      // if (*vflag) printf("S[%d] delivered msg to [%s] in room [%d]\n", this->id, cur->nickname.c_str(), target->room_id);
     }
     free(content);
   }
@@ -153,7 +153,7 @@ public:
     int msgID = ++this->seq[group - 1];
     m.setMsgID(msgID);
     char* msg = m.FIFOencoding();
-    if (*vflag) printf("S[%d] is ready to FOmulticast [%s]\n", this->id, msg);
+    if (*vflag) printf("%s S[%d] is ready to FOmulticast [%s]\n",this->getTime().c_str(), this->id, msg);
     this->broadcast(msg);
     free(msg);
   }
@@ -169,7 +169,7 @@ public:
     int nextID = seqRecent.at(group - 1) + 1;
     while(!queue.empty() && queue.begin()->first == nextID) {
       Msg curMsg = queue.begin()->second;
-      if (*vflag) printf("S[%d] delivered a msg to room [%d]\n", this->id, group);
+      if (*vflag) printf("%s S[%d] DELIVERED a msg to room [%d]\n",this->getTime().c_str(), this->id, group);
       this->deliverRoom(curMsg);
       queue.erase(nextID);
       seqRecent.at(group - 1) = nextID;
@@ -182,7 +182,7 @@ public:
     m.msgID = 0;
     m.nodeID = this->servers.size() + 1;
     char* msg = m.encodingTOTAL();
-    if (*vflag) printf("S[%d] MULTICAST_SERVER: [%s]\n", this->id, msg);
+    if (*vflag) printf("%s S[%d] MULTICAST_SERVER: [%s]\n",this->getTime().c_str(), this->id, msg);
     this->broadcast(msg);
     free(msg);
     priority_queue<int> queue;
@@ -202,7 +202,7 @@ public:
     char* msg = m.encodingTOTAL();
     // cout << "Server.h/212/respond: " << m.nodeID << " nodeID" << endl;
 
-    if (*vflag) printf("S[%d] PROPOSE         : [%s] P: [%d] ID: [%d]\n", this->id, msg, m.msgID, m.nodeID);
+    if (*vflag) printf("%s S[%d] PROPOSE         : [%s] P: [%d] ID: [%d]\n",this->getTime().c_str(), this->id, msg, m.msgID, m.nodeID);
     this->sendMsg(c, msg);
     free(msg);
   }
@@ -218,7 +218,7 @@ public:
         int proposal = m.msgID;
         int nodeID = m.nodeID;
 
-        if (*vflag) printf("S[%d] COLLECT         : [%s] P: [%d] ID: [%d]\n", this->id, m.encodingTOTAL(), proposal, nodeID);
+        if (*vflag) printf("%s S[%d] COLLECT         : [%s] P: [%d] ID: [%d]\n",this->getTime().c_str(), this->id, m.encodingTOTAL(), proposal, nodeID);
         // pq.push(proposal);
         // if (proposal > pq.top() || (proposal == pq.top() && cur.nodeID > nodeID)) {
         //   cur.nodeID = nodeID;
@@ -229,8 +229,6 @@ public:
           cur.nodeID = ::min(cur.nodeID, nodeID);
         }
         pq.push(proposal);
-
-        // printf("The current PQ size is [%lu]\n", pq.size());
         if (pq.size() == this->servers.size()) {
           int pro = pq.top();
           Msg out = cur;
@@ -239,7 +237,7 @@ public:
           out.state = 2;
           char* msg = out.encodingTOTAL();
 
-          if (*vflag) printf("S[%d] SEND            : [%s] A: [%d] ID: [%d]\n", this->id, msg, out.msgID, out.nodeID);
+          if (*vflag) printf("%s S[%d] SEND            : [%s] A: [%d] ID: [%d]\n",this->getTime().c_str(), this->id, msg, out.msgID, out.nodeID);
           this->broadcast(msg);
           free(msg);
           this->proposalCount.erase(this->proposalCount.begin() + i);
@@ -251,7 +249,7 @@ public:
   /* Update a decision for a specific msg and deliver */
   void update(Client & c, Msg& m) {
 
-    if (*vflag) printf("S[%d] UPDATE          : [%s] A: [%d] ID: [%d]\n", this->id, m.encodingTOTAL(), m.msgID, m.nodeID);
+    if (*vflag) printf("%s S[%d] UPDATE          : [%s] A: [%d] ID: [%d]\n",this->getTime().c_str(), this->id, m.encodingTOTAL(), m.msgID, m.nodeID);
     int group = m.room_id;
     priority_queue<Msg, vector<Msg>, Compare>& holdback = this->totalHold;
     priority_queue<Msg, vector<Msg>, Compare> temp;
@@ -265,7 +263,7 @@ public:
         cur.deliverable = true;
         this->Ag[group-1] = std::max(m.msgID, this->Ag[group-1]);
 
-        if (*vflag) printf("S[%d] MARK DELIVER    : [%s] A: [%d] ID: [%d]\n", this->id, cur.encodingTOTAL(), cur.msgID, cur.nodeID);
+        if (*vflag) printf("%s S[%d] MARK DELIVER    : [%s] A: [%d] ID: [%d]\n",this->getTime().c_str(), this->id, cur.encodingTOTAL(), cur.msgID, cur.nodeID);
       }
       temp.push(cur);
     }
@@ -273,15 +271,14 @@ public:
     holdback = this->totalHold;
     Msg check = holdback.top();
     while (check.deliverable) {
-      printHoldBack(holdback);
       holdback.pop();
       this->deliverRoom(check);
-      if (*vflag) printf("S[%d] FINAL DELIVER   : [%s] A: [%d] ID: [%d]\n", this->id, check.encodingTOTAL(), check.msgID, check.nodeID);
+      if (*vflag) printf("%s S[%d] FINAL DELIVER   : [%s] A: [%d] ID: [%d]\n", this->getTime().c_str(), this->id, check.encodingTOTAL(), check.msgID, check.nodeID);
       if (holdback.empty()) break;
       check = holdback.top();
     }
   }
-
+  /* Dumping the holdback queue */
   void printHoldBack(priority_queue<Msg, vector<Msg>, Compare> pq) {
     cout << endl;
     while (!pq.empty()) {
@@ -290,5 +287,17 @@ public:
       if (*vflag) printf("   S[%d] PRORITY QUEUE: [%s] A: [%d] ID: [%d]\n", this->id, m.encodingTOTAL(), m.msgID, m.nodeID);
     }
     cout << endl;
+  }
+  /* Get the string formatted current time */
+  string getTime() {
+    char            fmt[64], buf[64];
+    struct timeval  tv;
+    struct tm       *tm;
+    gettimeofday(&tv, NULL);
+    if((tm = localtime(&tv.tv_sec)) != NULL) {
+      strftime(fmt, sizeof fmt, "%H:%M:%S.%%06u", tm);
+      snprintf(buf, sizeof buf, fmt, tv.tv_usec);
+    }
+    return string(buf);
   }
 };

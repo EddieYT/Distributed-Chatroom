@@ -11,9 +11,7 @@ void handle_server(char* msg, Server& my_server, Client& c) {
     my_server.deliverUnordered(m);
   } else if (state == FIFO) {
     Msg m;
-    if (vflag) printf("S[%d] DECODE          : [%s] FROM [%s]\n", my_server.id, msg, c.toString().c_str());
     m.FIFOdecode(msg);
-    if (vflag) printf("S[%d] is ready to deliver FIFO message for group[%d] #[%d]\n", my_server.id, m.room_id, m.msgID);
     my_server.deliverFIFO(m, c);
   } else if (state == TOTAL) {
     Msg m;

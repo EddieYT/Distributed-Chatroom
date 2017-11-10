@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <algorithm>
 #include <errno.h>
 #include <iostream>
 #include <unistd.h>
@@ -41,7 +42,7 @@ int main(int argc, char *argv[])
     int rlen = recvfrom(sock, buffer, sizeof(buffer), MSG_DONTWAIT, (struct sockaddr*)&target, &target_size);
     buffer[rlen] = 0;
     if (rlen > 0) {
-        printf("Echo: [%s] (%d bytes) from %s\n", buffer, rlen, inet_ntoa(target.sin_addr));
+        printf("%s\n", buffer);
     } else {
       string input;
       getline(cin, input);

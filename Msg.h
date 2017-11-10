@@ -161,6 +161,7 @@ public:
 private:
 };
 
+/* Comparator for holdback queue*/
 class Compare {
 public:
   bool operator() (const Msg& lhs, const Msg&rhs) const

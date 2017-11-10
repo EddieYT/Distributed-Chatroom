@@ -10,6 +10,8 @@
 #include <vector>
 #include <map>
 #include <queue>
+#include <time.h>
+#include <sys/time.h>
 #include "Msg.h"
 #include "Client.h"
 #include "Room.h"
@@ -53,12 +55,11 @@ int main(int argc, char *argv[])
     if (rlen > 0) {
       if (from_server(client, servers)) {
         Client c(client);
-
-        if (vflag) printf("S[%d] SEND TO         : [%s]\n", my_server.id, c.toString().c_str());
+        if (vflag) printf("%s S[%d] SEND TO         : [%s]\n",my_server.getTime().c_str(), my_server.id, c.toString().c_str());
         handle_server(buff, my_server, c);
       } else {
         Client c(client);
-        if (vflag) printf("S[%d] RECEIVE FROM    : [%s]\n", my_server.id, c.toString().c_str());
+        if (vflag) printf("%s S[%d] RECEIVE FROM    : [%s]\n",my_server.getTime().c_str(), my_server.id, c.toString().c_str());
         handle_client(buff, my_server, c);
       }
     }
