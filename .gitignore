@@ -1,4 +1,4 @@
-test
+dir_to_ignore/test
 *.txt
 *.o
 
