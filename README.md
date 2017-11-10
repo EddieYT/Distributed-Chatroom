@@ -18,7 +18,7 @@ Modules include __Msg.h__, __Client.h__, __Room.h__, __Server.h__, __cmdline.h__
 - QUIT: quit this program
 
 ### Server
-#### There are several command line options: ./chatserver <a filename contains other servers' information> <ID for this server>
+#### Command line options: ./chatserver <a filename contains other servers' information> < Server ID >
 1. -v Debug mode: This mode will show debug messages for you.
 2. -o <ordering> Assign an order: You can decide the order of messages being delivered to clients.  
 Options: __Unordered(default)/FIFO/TOTAL__
